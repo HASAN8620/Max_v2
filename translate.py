@@ -9,7 +9,7 @@ KEYS_ENV = os.environ.get("GROQ_API_KEYS", "")
 API_KEYS = [k.strip() for k in KEYS_ENV.split(",") if k.strip()]
 
 if not API_KEYS:
-    print("❌ Error: GROQ_API_KEYS Secret nahi mila. GitHub Settings check karein.")
+    print("❌ Error: GROQ_API_KEYS Secret nahi mila.")
     exit(1)
 
 print(f"✅ Total {len(API_KEYS)} Groq API Keys loaded successfully!")
@@ -22,37 +22,48 @@ MODEL_NAME = "llama-3.1-8b-instant"
 
 curr_key_idx = 0
 
-# 2. Strict System Prompt (Optimized for JSON Mode)
+# 2. Strict Positive Prompt (No Negative/Wrong Examples)
 SYSTEM_PROMPT = """You are a native Pakistani video game localization expert for Max Payne 3.
-Translate English game dialogues into NATURAL, FLUENT, and DRAMATIC Pakistani Roman Urdu (WhatsApp style).
+Translate English game dialogues into natural, dramatic, spoken Pakistani Roman Urdu (WhatsApp style).
 
-STRICT OUTPUT FORMAT:
-You MUST respond with a JSON object where the keys are identical to the input keys, and the values are the Roman Urdu translations.
+RULES:
+1. Translate into natural spoken Pakistani dialogue tone.
+2. Vocabulary to use: 'waqt' (time), 'jism' (body), 'painkillers', 'sehat' (health), 'kaam' (work), 'dhoondne' (find), 'larai' (fight), 'bari' (big).
+3. Keep gaming terms in English: 'painkillers', 'ammo', 'guns', 'checkpoint', 'comfort zone', 'health', 'plan B'.
+4. Keep all formatting tags (~z~, ~w~, ~n~, ~a~, ~g~, ~b~) EXACTLY as they appear."""
 
-TRANSLATION RULES:
-1. NO LITERAL TRANSLATION: Translate into natural spoken Pakistani dialogue.
-   - WRONG: "Maine ek badi ladaai li thi..."
-   - RIGHT: "Meri ek bari larai hui thi..."
-2. FORBIDDEN HINDI WORDS:
-   - NEVER use 'shareer' -> use 'jism' or 'body'
-   - NEVER use 'samay' -> use 'waqt' or 'time'
-   - NEVER use 'dard nivaarak' -> use 'painkillers'
-   - NEVER use 'swasthya' -> use 'sehat'
-   - NEVER use 'karya' -> use 'kaam'
-   - NEVER use 'bhavnaon' -> use 'ehsaas'
-   - NEVER use 'khojne' -> use 'dhoondne'
-   - NEVER use 'vishesh' -> use 'khaas'
-   - NEVER use 'vah' -> use 'woh'
-3. KEEP GAMING TERMS: Keep 'painkillers', 'ammo', 'guns', 'checkpoint', 'comfort zone', 'health' in English as used in normal Urdu conversation.
-4. FORMATTING TAGS: Keep all formatting tags (~z~, ~w~, ~n~, ~a~, ~g~, ~b~) EXACTLY as they are in the source text."""
+# 3. Fail-Safe Python Auto-Corrector (Hinglish/Hindi Elimination)
+HINDI_TO_URDU = {
+    r'\bsamay\b': 'waqt',
+    r'\bshareer\b': 'jism',
+    r'\bdard nivaarak\b': 'painkillers',
+    r'\bswasthya\b': 'sehat',
+    r'\bkarya\b': 'kaam',
+    r'\bbhavnaon\b': 'ehsaas',
+    r'\bkhojne\b': 'dhoondne',
+    r'\bvishesh\b': 'khaas',
+    r'\bvah\b': 'woh',
+    r'\bladaai li\b': 'larai hui',
+    r'\bladaai\b': 'larai',
+    r'\bbadi\b': 'bari',
+    r'\bbada\b': 'bara',
+    r'\bkhata hai\b': 'khauf hai',
+    r'\btaraab\b': 'pareshan'
+}
 
-# 3. Translation Function with Native JSON Mode
+def clean_hindi_words(text):
+    if not isinstance(text, str):
+        return text
+    for pattern, replacement in HINDI_TO_URDU.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    return text
+
+# 4. Translation Function
 def translate_batch(batch_dict):
     global curr_key_idx
     url = "https://api.groq.com/openai/v1/chat/completions"
     
-    # Prompt explicitly formatted as JSON string
-    prompt = f"Translate the following JSON values to natural Pakistani Roman Urdu. Return a JSON object with the same keys:\n{json.dumps(batch_dict, ensure_ascii=False)}"
+    prompt = f"Translate these JSON values to natural Pakistani Roman Urdu:\n{json.dumps(batch_dict, ensure_ascii=False)}"
     
     max_attempts = len(API_KEYS) * 3 
     
@@ -63,7 +74,6 @@ def translate_batch(batch_dict):
                 {"role": "system", "content": SYSTEM_PROMPT}, 
                 {"role": "user", "content": prompt}
             ], 
-            # 🚀 FORCING GROQ NATIVE JSON MODE HERE:
             "response_format": {"type": "json_object"},
             "temperature": 0.2
         }
@@ -79,20 +89,17 @@ def translate_batch(batch_dict):
             if response.status_code == 200:
                 content = response.json()['choices'][0]['message']['content']
                 
-                # Robust JSON Extraction
                 try:
-                    # Clean potential markdown block wrappers if present
                     clean_content = content.strip()
-                    if clean_content.startswith("```json"):
-                        clean_content = clean_content[7:]
-                    if clean_content.startswith("```"):
-                        clean_content = clean_content[3:]
-                    if clean_content.endswith("```"):
-                        clean_content = clean_content[:-3]
+                    if clean_content.startswith("```json"): clean_content = clean_content[7:]
+                    if clean_content.startswith("```"): clean_content = clean_content[3:]
+                    if clean_content.endswith("```"): clean_content = clean_content[:-3]
                     
                     parsed = json.loads(clean_content.strip())
                     if isinstance(parsed, dict) and parsed:
-                        return parsed
+                        # 🚀 Python Auto-Correction Engine Rules Execution
+                        cleaned_parsed = {k: clean_hindi_words(v) for k, v in parsed.items()}
+                        return cleaned_parsed
                 except json.JSONDecodeError:
                     print(f"\n⚠️ Format Error. Retrying...", end="", flush=True)
                     
@@ -111,18 +118,22 @@ def translate_batch(batch_dict):
         curr_key_idx = (curr_key_idx + 1) % len(API_KEYS)
         time.sleep(2)
         
-    print("\n❌ Laga taar errors. Process pause kar rahe hain.")
+    print("\n❌ Errors. Pause.")
     exit(1)
 
-# 4. Main Processing Logic
+# 5. Main Processing Logic
 if os.path.exists(input_file):
     print(f"📁 Reading file: {input_file}", flush=True)
+    
+    # Force fresh run by wiping old checkpoint in memory if needed
     saved_data = {}
     if os.path.exists(checkpoint_file):
         with open(checkpoint_file, "r", encoding="utf-8") as f: 
             try:
                 saved_data = json.load(f)
-                print(f"🔄 Checkpoint Loaded: {len(saved_data)} lines pehle se completed hain.", flush=True)
+                # Clean existing checkpoint data as well!
+                saved_data = {k: clean_hindi_words(v) for k, v in saved_data.items()}
+                print(f"🔄 Checkpoint Loaded & Auto-Corrected: {len(saved_data)} lines.", flush=True)
             except Exception:
                 saved_data = {}
 
@@ -162,11 +173,12 @@ if os.path.exists(input_file):
             if re.search(r'=\s*~(z|w)~', line):
                 k = line.split('=', 1)[0].strip()
                 if k in saved_data:
-                    out.write(f"{k} = {saved_data[k]}\n")
+                    clean_text = clean_hindi_words(saved_data[k])
+                    out.write(f"{k} = {clean_text}\n")
                     count += 1
                 else: out.write(line)
             else: out.write(line)
             
-    print(f"\n🎉 BOOM! SUCCESS! {count} lines Natural Roman Urdu mein convert ho gayin!", flush=True)
+    print(f"\n🎉 BOOM! SUCCESS! {count} lines Pure Pakistani Roman Urdu mein convert ho gayin!", flush=True)
 else:
     print(f"❌ Error: '{input_file}' file nahi mili.", flush=True)
