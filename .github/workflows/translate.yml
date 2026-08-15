@@ -1,7 +1,11 @@
-name: Groq Fast Translation Runner
+name: Groq Roman Urdu Translator
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
+
+concurrency:
+  group: groq-translation
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -9,16 +13,14 @@ permissions:
 jobs:
   translate:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
-
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install Dependencies
         run: pip install requests
@@ -27,13 +29,36 @@ jobs:
         env:
           GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
         run: python translate.py
+        continue-on-error: true
 
-      # 🚀 YEH STEP HAR HAAL MEIN CHALEGA AUR PROGRESS SAVE KAREGA
       - name: Commit and Push Checkpoint (Resume Data)
         if: always()
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add american_roman.oxt translation_checkpoint.json || true
-          git commit -m "Auto-checkpoint: Saved translation progress" || echo "No changes to commit"
-          git push || echo "Push skipped or failed"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git add translation_checkpoint.json 2>/dev/null || true
+          git add american_roman.oxt 2>/dev/null || true
+          
+          if git diff --cached --quiet; then
+            echo "ℹ️ No new progress to commit this run."
+          else
+            git commit -m "chore: update translation checkpoint [skip ci]"
+            
+            pushed=false
+            for i in 1 2 3 4 5; do
+              git pull --rebase origin main
+              if git push origin main; then
+                pushed=true
+                break
+              fi
+              echo "⚠️ Push rejected (likely a race with another run) - retrying ($i/5)..."
+              sleep 5
+            done
+            
+            if [ "$pushed" = false ]; then
+              echo "❌ Could not push checkpoint after 5 attempts."
+              exit 1
+            fi
+            echo "✅ Checkpoint pushed successfully."
+          fi
