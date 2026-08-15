@@ -1,4 +1,4 @@
-name: Cloud Translation Runner
+name: Groq Fast Translation Runner
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
 jobs:
   translate:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 350
 
     steps:
       - name: Checkout Repository
@@ -28,10 +28,12 @@ jobs:
           GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
         run: python translate.py
 
-      - name: Commit and Push Translated Files
+      # 🚀 YEH STEP HAR HAAL MEIN CHALEGA AUR PROGRESS SAVE KAREGA
+      - name: Commit and Push Checkpoint (Resume Data)
+        if: always()
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add american_roman.oxt translation_checkpoint.json || true
-          git commit -m "Heavy Translation via Groq API (Roman Urdu)" || echo "No changes to commit"
+          git commit -m "Auto-checkpoint: Saved translation progress" || echo "No changes to commit"
           git push || echo "Push skipped or failed"
