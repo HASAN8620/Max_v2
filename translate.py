@@ -21,25 +21,32 @@ INPUT_FILE = "american.oxt"
 OUTPUT_FILE = "american_roman.oxt"
 CHECKPOINT_FILE = "translation_checkpoint.json"
 BATCH_SIZE = 20
-MODEL_NAME = "llama3-70b-8192"  
+
+# 🏆 USER'S CHOSEN BEST MODEL
+MODEL_NAME = "llama-3.3-70b-versatile"  
 curr_key_idx = 0
 
 # ==========================================
-# 2. EMERGENCY GITHUB SAVER (FIXED)
+# 2. EMERGENCY GITHUB SAVER (BULLETPROOF)
 # ==========================================
+# Script shuru hone se pehle hi Checkpoint file bana do taake Git kabhi error na de
+if not os.path.exists(CHECKPOINT_FILE):
+    with open(CHECKPOINT_FILE, "w", encoding="utf-8") as f:
+        json.dump({}, f)
+
 def force_save_to_github():
-    print("\n🚨 EMERGENCY: API fail ho gayi hai! Data GitHub par force-save kar rahe hain...", flush=True)
+    print("\n🚨 EMERGENCY: Data GitHub par force-save kar rahe hain...", flush=True)
     os.system('git config --global user.name "github-actions[bot]"')
     os.system('git config --global user.email "github-actions[bot]@users.noreply.github.com"')
     
-    # Ab file check karke save karega taake error na aaye
-    if os.path.exists(CHECKPOINT_FILE):
-        os.system(f'git add {CHECKPOINT_FILE} || true')
+    # Ab file 100% mojood hogi, koi pathspec error nahi aayega
+    os.system(f'git add {CHECKPOINT_FILE} || true')
+    if os.path.exists(OUTPUT_FILE):
+        os.system(f'git add {OUTPUT_FILE} || true')
         
-    os.system(f'git add {OUTPUT_FILE} || true')
     os.system('git commit -m "Emergency Save: API thak gayi, progress save kar li" || true')
     os.system('git push || true')
-    print("✅ PUSH ATTEMPT COMPLETE!", flush=True)
+    print("✅ PUSH ATTEMPT COMPLETE! Agli dafa yahin se Resume hoga.", flush=True)
 
 # ==========================================
 # 3. SECURITY LAYER (PROMPT & AUTO-CORRECTOR)
@@ -123,7 +130,6 @@ def translate_batch(batch_dict):
             elif response.status_code in [429, 413]:
                 print(f"\n⚠️ Key #{curr_key_idx + 1} Limit Hit. Switching key...", end="", flush=True)
             else:
-                # 🛑 ERROR PRINTING WAPAS LAGA DIYA HAI
                 print(f"\n⚠️ API ERROR {response.status_code}: {response.text[:100]}", flush=True)
                 
         except Exception as e:
@@ -146,14 +152,14 @@ if not os.path.exists(INPUT_FILE):
 print(f"📁 Reading source file: {INPUT_FILE}", flush=True)
 
 saved_data = {}
-if os.path.exists(CHECKPOINT_FILE):
-    with open(CHECKPOINT_FILE, "r", encoding="utf-8") as f: 
-        try:
-            saved_data = json.load(f)
-            saved_data = {k: clean_hindi_words(v) for k, v in saved_data.items()}
+with open(CHECKPOINT_FILE, "r", encoding="utf-8") as f: 
+    try:
+        saved_data = json.load(f)
+        saved_data = {k: clean_hindi_words(v) for k, v in saved_data.items()}
+        if saved_data:
             print(f"🔄 RESUME ACTIVE: {len(saved_data)} lines pehle se tayyar hain!", flush=True)
-        except Exception:
-            saved_data = {}
+    except Exception:
+        saved_data = {}
 
 with open(INPUT_FILE, "r", encoding="utf-8", errors="ignore") as f: 
     all_lines = f.readlines()
@@ -172,7 +178,7 @@ try:
                 
             if len(pending_batch) >= BATCH_SIZE:
                 current_progress = len(saved_data) + len(pending_batch)
-                print(f"\n🚀 Translating... ({current_progress}/{total_dialogues})", flush=True)
+                print(f"\n🚀 Translating (Llama 3.3 70B)... ({current_progress}/{total_dialogues})", flush=True)
                 
                 res = translate_batch(pending_batch)
                 if res:
@@ -190,7 +196,6 @@ try:
             with open(CHECKPOINT_FILE, "w", encoding="utf-8") as cf: 
                 json.dump(saved_data, cf, ensure_ascii=False, indent=2)
 
-    # FINAL SAVE HONE PAR BHI GITHUB PAR PUSH KAREGA
     force_save_to_github()
 
 except KeyboardInterrupt:
