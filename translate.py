@@ -21,7 +21,7 @@ INPUT_FILE = "american.oxt"
 OUTPUT_FILE = "american_roman.oxt"
 CHECKPOINT_FILE = "translation_checkpoint.json"
 BATCH_SIZE = 20
-MODEL_NAME = "llama-3.1-70b-versatile"  # Groq ka sab se smart aur heavy model
+MODEL_NAME = "llama-3.3-70b-versatile"  # Groq ka sab se smart aur heavy model
 curr_key_idx = 0
 
 # ==========================================
