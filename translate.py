@@ -21,7 +21,7 @@ INPUT_FILE = "american.oxt"
 OUTPUT_FILE = "american_roman.oxt"
 CHECKPOINT_FILE = "translation_checkpoint.json"
 BATCH_SIZE = 20
-MODEL_NAME = "llama-3.3-70b-versatile"  # Groq ka sab se smart aur heavy model
+MODEL_NAME = "llama-3.3-70b-versatile"  # Updated Active Groq Model
 curr_key_idx = 0
 
 # ==========================================
@@ -123,7 +123,6 @@ def translate_batch(batch_dict):
                 try:
                     parsed = json.loads(content.strip())
                     if isinstance(parsed, dict) and parsed:
-                        # FILTER LAG RAHA HAI (SAVE HONE SE PEHLE)
                         return {k: clean_hindi_words(v) for k, v in parsed.items()}
                 except json.JSONDecodeError:
                     print(f"\n⚠️ JSON Decode Error. Retrying...", end="", flush=True)
@@ -142,15 +141,15 @@ def translate_batch(batch_dict):
         curr_key_idx = (curr_key_idx + 1) % len(API_KEYS)
         time.sleep(1)
         
-    print("\n❌ CRITICAL: Saari Groq Keys thak chuki hain. Progress auto-save ho rahi hai!")
-    sys.exit(1)
+    print("\n⚠️ ALERT: Saari Groq Keys thak chuki hain. Progress save karne ke liye gracefully exit (0) kar rahe hain!")
+    sys.exit(0)  # ✅ FIX: Yahan 0 hona chahiye tha, jo ab hai!
 
 # ==========================================
 # 5. CORE LOGIC & RESUME SYSTEM
 # ==========================================
 if not os.path.exists(INPUT_FILE):
-    print("\n⚠️ ALERT: Saari Groq Keys thak chuki hain. Progress save karne ke liye gracefully exit kar rahe hain!")
-    sys.exit(0)
+    print(f"❌ ERROR: '{INPUT_FILE}' file nahi mili.")
+    sys.exit(1)  # ✅ FIX: Yeh wapas 1 kar diya hai taake file missing par theek error aaye.
 
 print(f"📁 Reading source file: {INPUT_FILE}", flush=True)
 
