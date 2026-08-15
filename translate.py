@@ -150,7 +150,7 @@ def translate_batch(batch_dict):
 # ==========================================
 if not os.path.exists(INPUT_FILE):
     print(f"❌ ERROR: '{INPUT_FILE}' file nahi mili.")
-    sys.exit(1)
+    sys.exit(0)
 
 print(f"📁 Reading source file: {INPUT_FILE}", flush=True)
 
