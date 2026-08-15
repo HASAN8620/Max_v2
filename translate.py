@@ -22,14 +22,14 @@ OUTPUT_FILE = "american_roman.oxt"
 CHECKPOINT_FILE = "translation_checkpoint.json"
 BATCH_SIZE = 20
 
-# 🏆 USER'S CHOSEN BEST MODEL
+# 🏆 THE BEST MODEL (Llama 3.3 70B)
 MODEL_NAME = "llama-3.3-70b-versatile"  
 curr_key_idx = 0
 
 # ==========================================
-# 2. EMERGENCY GITHUB SAVER (BULLETPROOF)
+# 2. EMERGENCY GITHUB SAVER (CONFLICT FIX)
 # ==========================================
-# Script shuru hone se pehle hi Checkpoint file bana do taake Git kabhi error na de
+# Script start hote hi dummy file bana do taake 'Not Found' error na aaye
 if not os.path.exists(CHECKPOINT_FILE):
     with open(CHECKPOINT_FILE, "w", encoding="utf-8") as f:
         json.dump({}, f)
@@ -39,12 +39,15 @@ def force_save_to_github():
     os.system('git config --global user.name "github-actions[bot]"')
     os.system('git config --global user.email "github-actions[bot]@users.noreply.github.com"')
     
-    # Ab file 100% mojood hogi, koi pathspec error nahi aayega
+    # Git Push Logic (Syncing before push to avoid Rejected error)
     os.system(f'git add {CHECKPOINT_FILE} || true')
     if os.path.exists(OUTPUT_FILE):
         os.system(f'git add {OUTPUT_FILE} || true')
         
     os.system('git commit -m "Emergency Save: API thak gayi, progress save kar li" || true')
+    
+    # 🌟 GITHUB REJECT ERROR FIX: Pehle remote se update lo, phir push karo
+    os.system('git pull --no-edit origin main || true')
     os.system('git push || true')
     print("✅ PUSH ATTEMPT COMPLETE! Agli dafa yahin se Resume hoga.", flush=True)
 
@@ -130,7 +133,8 @@ def translate_batch(batch_dict):
             elif response.status_code in [429, 413]:
                 print(f"\n⚠️ Key #{curr_key_idx + 1} Limit Hit. Switching key...", end="", flush=True)
             else:
-                print(f"\n⚠️ API ERROR {response.status_code}: {response.text[:100]}", flush=True)
+                # AB ASLI ERROR BHI PRINT HOGA
+                print(f"\n⚠️ API ERROR {response.status_code}: {response.text[:150]}", flush=True)
                 
         except Exception as e:
             print(f"\n⚠️ Connection Exception: {str(e)[:50]}", end="", flush=True)
@@ -152,14 +156,15 @@ if not os.path.exists(INPUT_FILE):
 print(f"📁 Reading source file: {INPUT_FILE}", flush=True)
 
 saved_data = {}
-with open(CHECKPOINT_FILE, "r", encoding="utf-8") as f: 
-    try:
-        saved_data = json.load(f)
-        saved_data = {k: clean_hindi_words(v) for k, v in saved_data.items()}
-        if saved_data:
-            print(f"🔄 RESUME ACTIVE: {len(saved_data)} lines pehle se tayyar hain!", flush=True)
-    except Exception:
-        saved_data = {}
+if os.path.exists(CHECKPOINT_FILE):
+    with open(CHECKPOINT_FILE, "r", encoding="utf-8") as f: 
+        try:
+            saved_data = json.load(f)
+            saved_data = {k: clean_hindi_words(v) for k, v in saved_data.items()}
+            if saved_data:
+                print(f"🔄 RESUME ACTIVE: {len(saved_data)} lines pehle se tayyar hain!", flush=True)
+        except Exception:
+            saved_data = {}
 
 with open(INPUT_FILE, "r", encoding="utf-8", errors="ignore") as f: 
     all_lines = f.readlines()
