@@ -22,37 +22,12 @@ OUTPUT_FILE = "american_roman.oxt"
 CHECKPOINT_FILE = "translation_checkpoint.json"
 BATCH_SIZE = 20
 
-# 🏆 THE BEST MODEL (Llama 3.3 70B)
+# 🏆 Aapka select kiya hua best model
 MODEL_NAME = "llama-3.3-70b-versatile"  
 curr_key_idx = 0
 
 # ==========================================
-# 2. EMERGENCY GITHUB SAVER (CONFLICT FIX)
-# ==========================================
-# Script start hote hi dummy file bana do taake 'Not Found' error na aaye
-if not os.path.exists(CHECKPOINT_FILE):
-    with open(CHECKPOINT_FILE, "w", encoding="utf-8") as f:
-        json.dump({}, f)
-
-def force_save_to_github():
-    print("\n🚨 EMERGENCY: Data GitHub par force-save kar rahe hain...", flush=True)
-    os.system('git config --global user.name "github-actions[bot]"')
-    os.system('git config --global user.email "github-actions[bot]@users.noreply.github.com"')
-    
-    # Git Push Logic (Syncing before push to avoid Rejected error)
-    os.system(f'git add {CHECKPOINT_FILE} || true')
-    if os.path.exists(OUTPUT_FILE):
-        os.system(f'git add {OUTPUT_FILE} || true')
-        
-    os.system('git commit -m "Emergency Save: API thak gayi, progress save kar li" || true')
-    
-    # 🌟 GITHUB REJECT ERROR FIX: Pehle remote se update lo, phir push karo
-    os.system('git pull --no-edit origin main || true')
-    os.system('git push || true')
-    print("✅ PUSH ATTEMPT COMPLETE! Agli dafa yahin se Resume hoga.", flush=True)
-
-# ==========================================
-# 3. SECURITY LAYER (PROMPT & AUTO-CORRECTOR)
+# 2. SECURITY LAYER (PROMPT & AUTO-CORRECTOR)
 # ==========================================
 SYSTEM_PROMPT = """You are an elite video game localization expert from Pakistan.
 Your task is to translate Max Payne 3 English dialogues into NATURAL, DRAMATIC, and GRITTY Pakistani Roman Urdu (WhatsApp style).
@@ -99,7 +74,7 @@ def clean_hindi_words(text):
     return text
 
 # ==========================================
-# 4. GROQ FAST TRANSLATION BATCH
+# 3. KAL WALA ORIGINAL BATCH SYSTEM (API ROTATION)
 # ==========================================
 def translate_batch(batch_dict):
     global curr_key_idx
@@ -129,25 +104,23 @@ def translate_batch(batch_dict):
                     if isinstance(parsed, dict) and parsed:
                         return {k: clean_hindi_words(v) for k, v in parsed.items()}
                 except json.JSONDecodeError:
-                    print(f"\n⚠️ JSON Decode Error. Retrying...", end="", flush=True)
-            elif response.status_code in [429, 413]:
-                print(f"\n⚠️ Key #{curr_key_idx + 1} Limit Hit. Switching key...", end="", flush=True)
+                    pass # Ignore karega aur next key par jayega
             else:
-                # AB ASLI ERROR BHI PRINT HOGA
-                print(f"\n⚠️ API ERROR {response.status_code}: {response.text[:150]}", flush=True)
+                # Agar koi bhi error (400, 429, 503) aaya, chup chaap key switch karega
+                print(f"\n⚠️ Key #{curr_key_idx + 1} Error ({response.status_code}). Switching to next key...", end="", flush=True)
                 
-        except Exception as e:
-            print(f"\n⚠️ Connection Exception: {str(e)[:50]}", end="", flush=True)
+        except Exception:
+            print(f"\n⚠️ Connection Error. Switching to next key...", end="", flush=True)
             
+        # Key change karne ka logic
         curr_key_idx = (curr_key_idx + 1) % len(API_KEYS)
         time.sleep(2)
         
-    print("\n❌ Saari attempts fail ho gayin!")
-    force_save_to_github()
-    sys.exit(0)
+    print("\n🚨 CRITICAL: Saari keys thak gayin hain. Process pause kar rahe hain.")
+    sys.exit(0) # Error code 0 (Success) taake GitHub file push kar de!
 
 # ==========================================
-# 5. CORE LOGIC & RESUME SYSTEM
+# 4. CORE LOGIC & RESUME SYSTEM
 # ==========================================
 if not os.path.exists(INPUT_FILE):
     print(f"❌ ERROR: '{INPUT_FILE}' file nahi mili.")
@@ -173,40 +146,48 @@ pending_batch = {}
 total_dialogues = sum(1 for line in all_lines if re.search(r'=\s*~(z|w)~', line))
 print(f"🎯 Total Dialogues to Translate: {total_dialogues}")
 
-try:
+for line in all_lines:
+    if re.search(r'=\s*~(z|w)~', line):
+        k = line.split('=', 1)[0].strip()
+        
+        if k not in saved_data:
+            pending_batch[k] = line.split('=', 1)[1].strip()
+            
+        if len(pending_batch) >= BATCH_SIZE:
+            current_progress = len(saved_data) + len(pending_batch)
+            print(f"\n🚀 Translating (Llama 3.3 70B)... ({current_progress}/{total_dialogues})", flush=True)
+            
+            res = translate_batch(pending_batch)
+            if res:
+                saved_data.update(res)
+                # Local save (GitHub Actions push khud karega)
+                with open(CHECKPOINT_FILE, "w", encoding="utf-8") as cf: 
+                    json.dump(saved_data, cf, ensure_ascii=False, indent=2)
+            
+            pending_batch = {}
+            time.sleep(1.0)
+
+if pending_batch:
+    res = translate_batch(pending_batch)
+    if res:
+        saved_data.update(res)
+        with open(CHECKPOINT_FILE, "w", encoding="utf-8") as cf: 
+            json.dump(saved_data, cf, ensure_ascii=False, indent=2)
+
+print("\n🔨 Rebuilding final american_roman.oxt file...", flush=True)
+converted_count = 0
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as out:
     for line in all_lines:
         if re.search(r'=\s*~(z|w)~', line):
             k = line.split('=', 1)[0].strip()
-            
-            if k not in saved_data:
-                pending_batch[k] = line.split('=', 1)[1].strip()
-                
-            if len(pending_batch) >= BATCH_SIZE:
-                current_progress = len(saved_data) + len(pending_batch)
-                print(f"\n🚀 Translating (Llama 3.3 70B)... ({current_progress}/{total_dialogues})", flush=True)
-                
-                res = translate_batch(pending_batch)
-                if res:
-                    saved_data.update(res)
-                    with open(CHECKPOINT_FILE, "w", encoding="utf-8") as cf: 
-                        json.dump(saved_data, cf, ensure_ascii=False, indent=2)
-                
-                pending_batch = {}
-                time.sleep(1.0)
-
-    if pending_batch:
-        res = translate_batch(pending_batch)
-        if res:
-            saved_data.update(res)
-            with open(CHECKPOINT_FILE, "w", encoding="utf-8") as cf: 
-                json.dump(saved_data, cf, ensure_ascii=False, indent=2)
-
-    force_save_to_github()
-
-except KeyboardInterrupt:
-    force_save_to_github()
-    sys.exit(0)
-except Exception as e:
-    print(f"Unexpected Error: {e}")
-    force_save_to_github()
-    sys.exit(0)
+            if k in saved_data:
+                clean_text = clean_hindi_words(saved_data[k])
+                out.write(f"{k} = {clean_text}\n")
+                converted_count += 1
+            else: 
+                out.write(line)
+        else: 
+            out.write(line)
+        
+print(f"\n🎉 BOOM! {converted_count}/{total_dialogues} lines Successfully Converted via Groq!", flush=True)
