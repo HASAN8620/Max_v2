@@ -25,16 +25,21 @@ MODEL_NAME = "llama3-70b-8192"
 curr_key_idx = 0
 
 # ==========================================
-# 2. EMERGENCY GITHUB SAVER (THE NEW WEAPON)
+# 2. EMERGENCY GITHUB SAVER (FIXED)
 # ==========================================
 def force_save_to_github():
-    print("\n🚨 EMERGENCY: Script rukne lagi hai! Data GitHub par force-save kar rahe hain...", flush=True)
+    print("\n🚨 EMERGENCY: API fail ho gayi hai! Data GitHub par force-save kar rahe hain...", flush=True)
     os.system('git config --global user.name "github-actions[bot]"')
     os.system('git config --global user.email "github-actions[bot]@users.noreply.github.com"')
-    os.system(f'git add {CHECKPOINT_FILE} {OUTPUT_FILE} || true')
+    
+    # Ab file check karke save karega taake error na aaye
+    if os.path.exists(CHECKPOINT_FILE):
+        os.system(f'git add {CHECKPOINT_FILE} || true')
+        
+    os.system(f'git add {OUTPUT_FILE} || true')
     os.system('git commit -m "Emergency Save: API thak gayi, progress save kar li" || true')
     os.system('git push || true')
-    print("✅ DATA GITHUB PAR PUSH HO GAYA! Agli dafa 100% yahin se Resume hoga.", flush=True)
+    print("✅ PUSH ATTEMPT COMPLETE!", flush=True)
 
 # ==========================================
 # 3. SECURITY LAYER (PROMPT & AUTO-CORRECTOR)
@@ -43,7 +48,7 @@ SYSTEM_PROMPT = """You are an elite video game localization expert from Pakistan
 Your task is to translate Max Payne 3 English dialogues into NATURAL, DRAMATIC, and GRITTY Pakistani Roman Urdu (WhatsApp style).
 
 STRICT OUTPUT RULES:
-1. You MUST respond with ONLY a valid JSON object. NO markdown.
+1. You MUST respond with ONLY a valid JSON object matching the exact input keys. Do not add explanations.
 2. The tone must be mature, cynical, and native to a Pakistani speaker.
 
 STRICTLY FORBIDDEN HINDI WORDS (MUST USE URDU):
@@ -106,6 +111,7 @@ def translate_batch(batch_dict):
         headers = {"Authorization": f"Bearer {API_KEYS[curr_key_idx]}", "Content-Type": "application/json"}
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=30)
+            
             if response.status_code == 200:
                 content = response.json()['choices'][0]['message']['content']
                 try:
@@ -116,16 +122,17 @@ def translate_batch(batch_dict):
                     print(f"\n⚠️ JSON Decode Error. Retrying...", end="", flush=True)
             elif response.status_code in [429, 413]:
                 print(f"\n⚠️ Key #{curr_key_idx + 1} Limit Hit. Switching key...", end="", flush=True)
-                curr_key_idx = (curr_key_idx + 1) % len(API_KEYS)
-                time.sleep(2)
-                continue
-        except Exception:
-            pass
+            else:
+                # 🛑 ERROR PRINTING WAPAS LAGA DIYA HAI
+                print(f"\n⚠️ API ERROR {response.status_code}: {response.text[:100]}", flush=True)
+                
+        except Exception as e:
+            print(f"\n⚠️ Connection Exception: {str(e)[:50]}", end="", flush=True)
             
         curr_key_idx = (curr_key_idx + 1) % len(API_KEYS)
-        time.sleep(1)
+        time.sleep(2)
         
-    # YAHAN HAMARA NAYA WEAPON CHALEGA
+    print("\n❌ Saari attempts fail ho gayin!")
     force_save_to_github()
     sys.exit(0)
 
