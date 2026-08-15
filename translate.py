@@ -149,7 +149,7 @@ def translate_batch(batch_dict):
 # 5. CORE LOGIC & RESUME SYSTEM
 # ==========================================
 if not os.path.exists(INPUT_FILE):
-    print(f"❌ ERROR: '{INPUT_FILE}' file nahi mili.")
+    print("\n⚠️ ALERT: Saari Groq Keys thak chuki hain. Progress save karne ke liye gracefully exit kar rahe hain!")
     sys.exit(0)
 
 print(f"📁 Reading source file: {INPUT_FILE}", flush=True)
