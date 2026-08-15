@@ -21,9 +21,7 @@ INPUT_FILE = "american.oxt"
 OUTPUT_FILE = "american_roman.oxt"
 CHECKPOINT_FILE = "translation_checkpoint.json"
 BATCH_SIZE = 20
-
-# 🏆 Aapka select kiya hua best model
-MODEL_NAME = "llama-3.3-70b-versatile"  
+MODEL_NAME = "llama-3.3-70b-versatile"
 curr_key_idx = 0
 
 # ==========================================
@@ -74,7 +72,7 @@ def clean_hindi_words(text):
     return text
 
 # ==========================================
-# 3. KAL WALA ORIGINAL BATCH SYSTEM (API ROTATION)
+# 3. GROQ TRANSLATION BATCH & KEY ROTATION
 # ==========================================
 def translate_batch(batch_dict):
     global curr_key_idx
@@ -104,20 +102,20 @@ def translate_batch(batch_dict):
                     if isinstance(parsed, dict) and parsed:
                         return {k: clean_hindi_words(v) for k, v in parsed.items()}
                 except json.JSONDecodeError:
-                    pass # Ignore karega aur next key par jayega
+                    print(f"\n⚠️ JSON Decode Error. Retrying...", end="", flush=True)
+            elif response.status_code in [429, 413]:
+                print(f"\n⚠️ Key #{curr_key_idx + 1} Limit Hit. Switching key...", end="", flush=True)
             else:
-                # Agar koi bhi error (400, 429, 503) aaya, chup chaap key switch karega
-                print(f"\n⚠️ Key #{curr_key_idx + 1} Error ({response.status_code}). Switching to next key...", end="", flush=True)
+                print(f"\n⚠️ API ERROR {response.status_code}: {response.text[:100]}", flush=True)
                 
-        except Exception:
-            print(f"\n⚠️ Connection Error. Switching to next key...", end="", flush=True)
+        except Exception as e:
+            print(f"\n⚠️ Connection Exception: {str(e)[:50]}", end="", flush=True)
             
-        # Key change karne ka logic
         curr_key_idx = (curr_key_idx + 1) % len(API_KEYS)
         time.sleep(2)
         
-    print("\n🚨 CRITICAL: Saari keys thak gayin hain. Process pause kar rahe hain.")
-    sys.exit(0) # Error code 0 (Success) taake GitHub file push kar de!
+    print("\n❌ Saari Groq keys thak chuki hain. Exit ho raha hai.")
+    sys.exit(0)
 
 # ==========================================
 # 4. CORE LOGIC & RESUME SYSTEM
@@ -155,12 +153,11 @@ for line in all_lines:
             
         if len(pending_batch) >= BATCH_SIZE:
             current_progress = len(saved_data) + len(pending_batch)
-            print(f"\n🚀 Translating (Llama 3.3 70B)... ({current_progress}/{total_dialogues})", flush=True)
+            print(f"\n🚀 Translating... ({current_progress}/{total_dialogues})", flush=True)
             
             res = translate_batch(pending_batch)
             if res:
                 saved_data.update(res)
-                # Local save (GitHub Actions push khud karega)
                 with open(CHECKPOINT_FILE, "w", encoding="utf-8") as cf: 
                     json.dump(saved_data, cf, ensure_ascii=False, indent=2)
             
@@ -175,8 +172,6 @@ if pending_batch:
             json.dump(saved_data, cf, ensure_ascii=False, indent=2)
 
 print("\n🔨 Rebuilding final american_roman.oxt file...", flush=True)
-converted_count = 0
-
 with open(OUTPUT_FILE, "w", encoding="utf-8") as out:
     for line in all_lines:
         if re.search(r'=\s*~(z|w)~', line):
@@ -184,10 +179,9 @@ with open(OUTPUT_FILE, "w", encoding="utf-8") as out:
             if k in saved_data:
                 clean_text = clean_hindi_words(saved_data[k])
                 out.write(f"{k} = {clean_text}\n")
-                converted_count += 1
             else: 
                 out.write(line)
         else: 
             out.write(line)
         
-print(f"\n🎉 BOOM! {converted_count}/{total_dialogues} lines Successfully Converted via Groq!", flush=True)
+print(f"\n🎉 BOOM! File Successfully Converted!", flush=True)
